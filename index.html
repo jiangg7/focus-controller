@@ -1,0 +1,1307 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>无线跟焦控制器</title>
+    
+    <!-- PWA 支持 -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#00d4ff">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="application-name" content="跟焦器">
+    
+    <!-- iOS 支持 -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="跟焦器">
+    <link rel="apple-touch-icon" href="icon-192.png">
+    
+    <!-- 图标 -->
+    <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+    <link rel="icon" type="image/png" sizes="512x512" href="icon-512.png">
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            min-height: 100vh;
+            min-height: -webkit-fill-available;
+            color: #fff;
+            padding: 16px;
+            padding-top: max(16px, env(safe-area-inset-top));
+            padding-bottom: max(16px, env(safe-area-inset-bottom));
+            padding-left: max(16px, env(safe-area-inset-left));
+            padding-right: max(16px, env(safe-area-inset-right));
+            -webkit-user-select: none;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+        
+        .container {
+            max-width: 420px;
+            margin: 0 auto;
+        }
+        
+        h1 {
+            text-align: center;
+            font-size: 22px;
+            margin-bottom: 16px;
+            color: #00d4ff;
+        }
+        
+        .status-bar {
+            background: rgba(255,255,255,0.1);
+            border-radius: 12px;
+            padding: 12px 16px;
+            margin-bottom: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #ff4444;
+        }
+        
+        .status-dot.connected {
+            background: #44ff44;
+        }
+        
+        .connect-btn {
+            background: linear-gradient(135deg, #00d4ff, #0099cc);
+            border: none;
+            color: white;
+            padding: 14px 28px;
+            font-size: 16px;
+            border-radius: 25px;
+            cursor: pointer;
+            width: 100%;
+            margin-bottom: 16px;
+            font-weight: 600;
+        }
+        
+        .connect-btn:disabled {
+            background: #666;
+        }
+        
+        .section {
+            background: rgba(255,255,255,0.08);
+            border-radius: 14px;
+            padding: 14px;
+            margin-bottom: 12px;
+        }
+        
+        .section-title {
+            font-size: 12px;
+            color: #888;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        .current-info {
+            text-align: center;
+            padding: 16px 0;
+        }
+        
+        .current-lens-name {
+            font-size: 26px;
+            font-weight: 700;
+            color: #00d4ff;
+            margin-bottom: 6px;
+        }
+        
+        .current-position {
+            font-size: 14px;
+            color: #aaa;
+        }
+        
+        .mode-badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+            margin-top: 8px;
+        }
+        
+        .mode-badge.unlimited {
+            background: #ff9944;
+            color: #000;
+        }
+        
+        .mode-badge.limited {
+            background: #44ff44;
+            color: #000;
+        }
+        
+        .limits-display {
+            display: flex;
+            justify-content: space-around;
+            margin-top: 12px;
+        }
+        
+        .limit-item {
+            text-align: center;
+        }
+        
+        .limit-label {
+            font-size: 11px;
+            color: #666;
+        }
+        
+        .limit-value {
+            font-size: 16px;
+            font-weight: 600;
+        }
+        
+        .limit-value.set {
+            color: #44ff44;
+        }
+        
+        .limit-value.unset {
+            color: #666;
+        }
+        
+        .progress-bar {
+            height: 6px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 3px;
+            margin-top: 12px;
+            overflow: hidden;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #00d4ff, #44ff44);
+            width: 0%;
+            transition: width 0.3s;
+        }
+        
+        .lens-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 8px;
+        }
+        
+        .lens-btn {
+            aspect-ratio: 1;
+            border: 2px solid rgba(255,255,255,0.2);
+            background: rgba(255,255,255,0.05);
+            border-radius: 10px;
+            color: #fff;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 6px 2px;
+        }
+        
+        .lens-btn.active {
+            border-color: #00d4ff;
+            background: rgba(0, 212, 255, 0.2);
+            box-shadow: 0 0 10px rgba(0, 212, 255, 0.3);
+        }
+        
+        .lens-btn.has-data {
+            border-color: #44ff44;
+        }
+        
+        .lens-btn.unlimited-lens {
+            border-color: #ff9944;
+        }
+        
+        .lens-btn .lens-num {
+            font-size: 18px;
+            margin-bottom: 2px;
+        }
+        
+        .lens-btn .lens-name {
+            font-size: 8px;
+            color: #888;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            max-width: 100%;
+        }
+        
+        .control-row {
+            display: flex;
+            align-items: center;
+            margin-bottom: 12px;
+            gap: 10px;
+        }
+        
+        .control-label {
+            font-size: 13px;
+            color: #aaa;
+            min-width: 60px;
+        }
+        
+        .sensitivity-slider {
+            flex: 1;
+            -webkit-appearance: none;
+            appearance: none;
+            height: 8px;
+            background: rgba(255,255,255,0.2);
+            border-radius: 4px;
+            outline: none;
+        }
+        
+        .sensitivity-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 22px;
+            height: 22px;
+            background: linear-gradient(135deg, #00d4ff, #0099cc);
+            border-radius: 50%;
+            cursor: pointer;
+        }
+        
+        .sensitivity-value {
+            min-width: 45px;
+            text-align: right;
+            font-size: 14px;
+            font-weight: 600;
+            color: #00d4ff;
+        }
+        
+        .direction-toggle {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .toggle-switch {
+            position: relative;
+            width: 50px;
+            height: 26px;
+            background: rgba(255,255,255,0.2);
+            border-radius: 13px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        
+        .toggle-switch.active {
+            background: #00d4ff;
+        }
+        
+        .toggle-switch::after {
+            content: '';
+            position: absolute;
+            width: 22px;
+            height: 22px;
+            background: white;
+            border-radius: 50%;
+            top: 2px;
+            left: 2px;
+            transition: transform 0.3s;
+        }
+        
+        .toggle-switch.active::after {
+            transform: translateX(24px);
+        }
+        
+        .direction-label {
+            font-size: 12px;
+            color: #888;
+        }
+        
+        .action-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+        }
+        
+        .action-btn {
+            padding: 14px;
+            border: none;
+            border-radius: 10px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        
+        .action-btn.primary {
+            background: linear-gradient(135deg, #00d4ff, #0099cc);
+            color: white;
+        }
+        
+        .action-btn.secondary {
+            background: rgba(255,255,255,0.1);
+            color: #fff;
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+        
+        .action-btn.danger {
+            background: linear-gradient(135deg, #ff4444, #cc0000);
+            color: white;
+        }
+        
+        .action-btn.success {
+            background: linear-gradient(135deg, #44ff44, #00cc00);
+            color: #000;
+        }
+        
+        .action-btn.warning {
+            background: linear-gradient(135deg, #ff9944, #cc6600);
+            color: #000;
+        }
+        
+        .action-btn:disabled {
+            opacity: 0.5;
+        }
+        
+        .action-btn.full-width {
+            grid-column: 1 / -1;
+        }
+        
+        .rename-section {
+            margin-top: 10px;
+            display: flex;
+            gap: 8px;
+        }
+        
+        .rename-input {
+            flex: 1;
+            padding: 10px;
+            border: 1px solid rgba(255,255,255,0.2);
+            border-radius: 8px;
+            background: rgba(0,0,0,0.3);
+            color: #fff;
+            font-size: 14px;
+        }
+        
+        .rename-input::placeholder {
+            color: #666;
+        }
+        
+        .rename-btn {
+            padding: 10px 16px;
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.2);
+            border-radius: 8px;
+            color: #fff;
+            font-size: 14px;
+            cursor: pointer;
+        }
+        
+        .log-section {
+            max-height: 120px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 10px;
+            color: #888;
+            background: rgba(0,0,0,0.3);
+            border-radius: 8px;
+            padding: 8px;
+        }
+        
+        .log-entry {
+            margin-bottom: 3px;
+        }
+        
+        .log-entry.error {
+            color: #ff6666;
+        }
+        
+        .log-entry.success {
+            color: #66ff66;
+        }
+        
+        /* 模态弹窗 */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.8);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .modal-overlay.show {
+            display: flex;
+        }
+        
+        .modal-content {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            border-radius: 16px;
+            padding: 24px;
+            max-width: 340px;
+            width: 90%;
+            text-align: center;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        
+        .modal-icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+        }
+        
+        .modal-title {
+            font-size: 18px;
+            font-weight: 700;
+            margin-bottom: 12px;
+            color: #00d4ff;
+        }
+        
+        .modal-message {
+            font-size: 14px;
+            color: #aaa;
+            margin-bottom: 20px;
+            line-height: 1.5;
+        }
+        
+        .modal-buttons {
+            display: flex;
+            gap: 12px;
+        }
+        
+        .modal-btn {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            border-radius: 10px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        
+        .modal-btn.cancel {
+            background: rgba(255,255,255,0.1);
+            color: #fff;
+        }
+        
+        .modal-btn.confirm {
+            background: linear-gradient(135deg, #44ff44, #00cc00);
+            color: #000;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎬 无线跟焦控制器</h1>
+        
+        <div class="status-bar">
+            <span id="statusText">未连接</span>
+            <div class="status-dot" id="statusDot"></div>
+        </div>
+        
+        <button class="connect-btn" id="connectBtn" onclick="toggleConnection()">
+            连接设备
+        </button>
+        
+        <div class="section">
+            <div class="section-title">当前镜头</div>
+            <div class="current-info">
+                <div class="current-lens-name" id="currentLensName">--</div>
+                <div class="current-position">位置: <span id="currentPos">--</span></div>
+                <div id="modeBadge"></div>
+                <div class="limits-display">
+                    <div class="limit-item">
+                        <div class="limit-label">A点 (近焦)</div>
+                        <div class="limit-value" id="limitA">--</div>
+                    </div>
+                    <div class="limit-item">
+                        <div class="limit-label">B点 (远焦)</div>
+                        <div class="limit-value" id="limitB">0</div>
+                    </div>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFill"></div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="section">
+            <div class="section-title">选择镜头</div>
+            <div class="lens-grid" id="lensGrid">
+                <button class="lens-btn" onclick="requestSwitchLens(0)"><span class="lens-num">1</span><span class="lens-name">--</span></button>
+                <button class="lens-btn" onclick="requestSwitchLens(1)"><span class="lens-num">2</span><span class="lens-name">--</span></button>
+                <button class="lens-btn" onclick="requestSwitchLens(2)"><span class="lens-num">3</span><span class="lens-name">--</span></button>
+                <button class="lens-btn" onclick="requestSwitchLens(3)"><span class="lens-num">4</span><span class="lens-name">--</span></button>
+                <button class="lens-btn" onclick="requestSwitchLens(4)"><span class="lens-num">5</span><span class="lens-name">--</span></button>
+            </div>
+        </div>
+        
+        <div class="section">
+            <div class="section-title">设置</div>
+            <div class="control-row">
+                <span class="control-label">灵敏度</span>
+                <input type="range" class="sensitivity-slider" id="sensitivitySlider" 
+                       min="10" max="100" value="100" onchange="setSensitivity(this.value)">
+                <span class="sensitivity-value" id="sensitivityValue">100%</span>
+            </div>
+            
+            <div class="control-row">
+                <span class="control-label">方向</span>
+                <div class="direction-toggle">
+                    <div class="toggle-switch" id="directionToggle" onclick="toggleDirection()"></div>
+                    <span class="direction-label" id="directionLabel">正常</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="section">
+            <div class="section-title">操作</div>
+            
+            <!-- 设置状态提示 -->
+            <div id="setupStatus" style="margin-bottom:10px; padding:8px; border-radius:8px; font-size:12px; text-align:center;"></div>
+            
+            <!-- 无限位时显示：设置AB点按钮 -->
+            <div class="action-grid" id="setupButtons">
+                <button class="action-btn primary full-width" id="btnSetB" onclick="setBPoint()">
+                    🎯 1. 设置B点 (远焦归零)
+                </button>
+                <button class="action-btn warning full-width" id="btnSetA" onclick="setAPoint()">
+                    📍 2. 设置A点 (近焦)
+                </button>
+            </div>
+            
+            <!-- 有限位时显示：重设按钮 -->
+            <div class="action-grid" id="resetButtons" style="display:none;">
+                <button class="action-btn danger full-width" onclick="confirmReset()">
+                    🔄 重设限位
+                </button>
+            </div>
+            
+            <!-- 通用按钮 -->
+            <div class="action-grid" style="margin-top:10px;">
+                <button class="action-btn secondary" onclick="sendCmd('R')">
+                    🔄 刷新
+                </button>
+                <button class="action-btn primary" onclick="showRename()">
+                    ✏️ 命名镜头
+                </button>
+            </div>
+            
+            <div class="rename-section" id="renameSection" style="display:none;">
+                <input type="text" class="rename-input" id="renameInput" 
+                       placeholder="镜头名称 (如: 24mm)" maxlength="11">
+                <button class="rename-btn" onclick="renameLens()">确定</button>
+            </div>
+        </div>
+        
+        <!-- 自动往返模式 -->
+        <div class="section" id="autoModeSection">
+            <div class="section-title">自动往返模式 <span id="autoModeStatus" style="color:#ff9944;">(未启用)</span></div>
+            
+            <!-- 未进入自动模式时 -->
+            <div id="autoModeOff">
+                <button class="action-btn warning full-width" onclick="enterAutoMode()">
+                    🔄 进入自动往返模式
+                </button>
+                <div style="font-size:11px; color:#666; margin-top:8px; text-align:center;">
+                    独立设置AB点和速度，点击开始自动来回运动
+                </div>
+            </div>
+            
+            <!-- 进入自动模式后 -->
+            <div id="autoModeOn" style="display:none;">
+                <!-- 状态显示 -->
+                <div style="display:flex; justify-content:space-around; margin-bottom:12px; padding:8px; background:rgba(0,0,0,0.2); border-radius:8px;">
+                    <div style="text-align:center;">
+                        <div style="font-size:10px; color:#888;">A点</div>
+                        <div id="autoPointADisplay" style="font-size:14px; font-weight:600;">未设置</div>
+                    </div>
+                    <div style="text-align:center;">
+                        <div style="font-size:10px; color:#888;">B点</div>
+                        <div id="autoPointBDisplay" style="font-size:14px; font-weight:600;">未设置</div>
+                    </div>
+                    <div style="text-align:center;">
+                        <div style="font-size:10px; color:#888;">状态</div>
+                        <div id="autoRunningDisplay" style="font-size:14px; font-weight:600;">停止</div>
+                    </div>
+                </div>
+                
+                <!-- 设置按钮 -->
+                <div class="action-grid" style="margin-bottom:10px;">
+                    <button class="action-btn primary" onclick="setAutoPointA()">
+                        📍 设置A点
+                    </button>
+                    <button class="action-btn primary" onclick="setAutoPointB()">
+                        📍 设置B点
+                    </button>
+                </div>
+                
+                <!-- 速度滑块 -->
+                <div class="control-row">
+                    <span class="control-label">速度</span>
+                    <input type="range" class="sensitivity-slider" id="autoSpeedSlider" 
+                           min="1" max="100" value="50" onchange="setAutoSpeed(this.value)">
+                    <span class="sensitivity-value" id="autoSpeedValue">50%</span>
+                </div>
+                
+                <!-- 开始/停止按钮 -->
+                <div class="action-grid" style="margin-top:10px;">
+                    <button class="action-btn success full-width" id="autoStartBtn" onclick="startAutoMove()">
+                        ▶️ <span id="autoStartBtnText">开始运动</span>
+                    </button>
+                </div>
+                <div class="action-grid" style="margin-top:8px;">
+                    <button class="action-btn secondary" onclick="stopAutoMove()">
+                        ⏹️ 停止
+                    </button>
+                    <button class="action-btn danger" onclick="exitAutoMode()">
+                        ✖️ 退出模式
+                    </button>
+                </div>
+                
+                <div style="font-size:10px; color:#666; margin-top:8px; text-align:center;">
+                    💡 单击编码器按钮也可以触发开始
+                </div>
+            </div>
+        </div>
+        
+        <div class="section">
+            <div class="section-title">日志</div>
+            <div class="log-section" id="logSection"></div>
+        </div>
+    </div>
+    
+    <!-- 切换镜头确认弹窗 -->
+    <div class="modal-overlay" id="switchModal">
+        <div class="modal-content">
+            <div class="modal-icon">🔄</div>
+            <div class="modal-title">切换镜头</div>
+            <div class="modal-message" id="switchModalMessage">
+                请将镜头手动转到<strong>远焦点(∞)</strong>位置，<br>
+                然后点击确定完成切换。
+            </div>
+            <div class="modal-buttons">
+                <button class="modal-btn cancel" onclick="cancelSwitch()">取消</button>
+                <button class="modal-btn confirm" onclick="confirmSwitch()">已转到远焦，确定</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const SERVICE_UUID = '12345678-1234-1234-1234-123456789abc';
+        const CHAR_CMD_UUID = '12345678-1234-1234-1234-123456789abd';
+        const CHAR_STATUS_UUID = '12345678-1234-1234-1234-123456789abe';
+        
+        let device = null;
+        let cmdChar = null;
+        let statusChar = null;
+        let connected = false;
+        
+        // 数据存储
+        let currentLens = 0;
+        let currentPos = 0;
+        let sensitivity = 100;
+        let directionReversed = false;
+        let unlimitedMode = false;
+        let pendingLensSwitch = -1;
+        
+        let lenses = [];
+        for (let i = 0; i < 5; i++) {
+            lenses.push({
+                id: i,
+                name: 'Lens' + (i+1),
+                min: 0,
+                max: 0,
+                minSet: false,
+                maxSet: false,
+                hasLimits: false
+            });
+        }
+        
+        // 自动往返模式数据
+        let autoMode = false;
+        let autoPointA = 0;
+        let autoPointB = 0;
+        let autoPointASet = false;
+        let autoPointBSet = false;
+        let autoSpeed = 50;
+        let autoRunning = false;
+        let autoDirection = true;
+        
+        function log(msg, type = 'info') {
+            const logSection = document.getElementById('logSection');
+            const entry = document.createElement('div');
+            entry.className = 'log-entry ' + type;
+            const time = new Date().toLocaleTimeString();
+            entry.textContent = time.substring(0, 8) + ' ' + msg;
+            logSection.insertBefore(entry, logSection.firstChild);
+            while (logSection.children.length > 30) {
+                logSection.removeChild(logSection.lastChild);
+            }
+        }
+        
+        function updateUI() {
+            const statusDot = document.getElementById('statusDot');
+            const statusText = document.getElementById('statusText');
+            const connectBtn = document.getElementById('connectBtn');
+            
+            if (connected) {
+                statusDot.classList.add('connected');
+                statusText.textContent = '已连接';
+                connectBtn.textContent = '断开连接';
+            } else {
+                statusDot.classList.remove('connected');
+                statusText.textContent = '未连接';
+                connectBtn.textContent = '连接设备';
+            }
+        }
+        
+        function updateControlsUI() {
+            // 灵敏度
+            document.getElementById('sensitivitySlider').value = sensitivity;
+            document.getElementById('sensitivityValue').textContent = sensitivity + '%';
+            
+            // 方向
+            const toggle = document.getElementById('directionToggle');
+            const label = document.getElementById('directionLabel');
+            if (directionReversed) {
+                toggle.classList.add('active');
+                label.textContent = '反转';
+            } else {
+                toggle.classList.remove('active');
+                label.textContent = '正常';
+            }
+        }
+        
+        function updateDisplay() {
+            const lens = lenses[currentLens];
+            document.getElementById('currentLensName').textContent = lens.name;
+            document.getElementById('currentPos').textContent = currentPos;
+            
+            // 模式标签
+            const modeBadge = document.getElementById('modeBadge');
+            if (unlimitedMode) {
+                modeBadge.innerHTML = '<span class="mode-badge unlimited">无限位模式</span>';
+            } else if (lens.hasLimits) {
+                modeBadge.innerHTML = '<span class="mode-badge limited">有限位</span>';
+            } else {
+                modeBadge.innerHTML = '<span class="mode-badge unlimited">无限位镜头</span>';
+            }
+            
+            // 限位显示
+            const limitA = document.getElementById('limitA');
+            const limitB = document.getElementById('limitB');
+            
+            if (lens.minSet) {
+                limitA.textContent = lens.min;
+                limitA.className = 'limit-value set';
+            } else {
+                limitA.textContent = '未设置';
+                limitA.className = 'limit-value unset';
+            }
+            
+            // B点永远是0
+            limitB.textContent = '0';
+            limitB.className = lens.maxSet ? 'limit-value set' : 'limit-value unset';
+            
+            // 进度条
+            if (lens.minSet && lens.maxSet && lens.min != 0) {
+                const range = 0 - lens.min;  // B=0, A=负值
+                const pos = currentPos - lens.min;
+                const percent = Math.max(0, Math.min(100, (pos / range) * 100));
+                document.getElementById('progressFill').style.width = percent + '%';
+            } else {
+                document.getElementById('progressFill').style.width = '0%';
+            }
+            
+            // 更新镜头按钮
+            const buttons = document.querySelectorAll('.lens-btn');
+            buttons.forEach((btn, i) => {
+                btn.classList.remove('active', 'has-data', 'unlimited-lens');
+                if (i === currentLens) btn.classList.add('active');
+                if (lenses[i].hasLimits) {
+                    btn.classList.add('has-data');
+                } else {
+                    btn.classList.add('unlimited-lens');
+                }
+                btn.querySelector('.lens-name').textContent = lenses[i].name;
+            });
+            
+            // 更新操作按钮显示
+            updateActionButtons();
+        }
+        
+        // 根据限位状态更新操作按钮
+        function updateActionButtons() {
+            const lens = lenses[currentLens];
+            const setupButtons = document.getElementById('setupButtons');
+            const resetButtons = document.getElementById('resetButtons');
+            const setupStatus = document.getElementById('setupStatus');
+            const btnSetB = document.getElementById('btnSetB');
+            const btnSetA = document.getElementById('btnSetA');
+            
+            // 只有AB点都设置了才显示重设按钮
+            const fullyConfigured = lens.minSet && lens.maxSet;
+            
+            console.log('updateActionButtons:', 'minSet:', lens.minSet, 'maxSet:', lens.maxSet, 'fullyConfigured:', fullyConfigured);
+            
+            if (fullyConfigured) {
+                // AB点都设置了：显示重设按钮
+                setupButtons.style.display = 'none';
+                resetButtons.style.display = 'grid';
+                setupStatus.style.display = 'none';
+            } else {
+                // 还没设置完：显示设置AB点按钮
+                setupButtons.style.display = 'grid';
+                resetButtons.style.display = 'none';
+                setupStatus.style.display = 'block';
+                
+                if (!lens.maxSet) {
+                    // B点未设置
+                    setupStatus.innerHTML = '⚪ 请先将镜头转到<strong>远焦点(∞)</strong>，然后点击设置B点';
+                    setupStatus.style.background = 'rgba(0, 212, 255, 0.2)';
+                    btnSetB.disabled = false;
+                    btnSetB.style.opacity = '1';
+                    btnSetA.disabled = true;
+                    btnSetA.style.opacity = '0.4';
+                } else {
+                    // B点已设置，A点未设置
+                    setupStatus.innerHTML = '✅ B点已设置！请将镜头转到<strong>近焦点</strong>，然后点击设置A点';
+                    setupStatus.style.background = 'rgba(68, 255, 68, 0.2)';
+                    btnSetB.disabled = true;
+                    btnSetB.style.opacity = '0.4';
+                    btnSetA.disabled = false;
+                    btnSetA.style.opacity = '1';
+                }
+            }
+        }
+        
+        // 解析分包数据
+        function parsePacket(data) {
+            const str = data.trim();
+            
+            if (str.startsWith('S:')) {
+                // 状态包: S:currentIndex,position,minSet,maxSet,sensitivity,dirReversed,unlimitedMode,pendingSwitch
+                const parts = str.substring(2).split(',');
+                if (parts.length >= 4) {
+                    currentLens = parseInt(parts[0]);
+                    currentPos = parseInt(parts[1]);
+                    
+                    if (parts.length >= 8) {
+                        sensitivity = parseInt(parts[4]);
+                        directionReversed = parts[5] === '1';
+                        unlimitedMode = parts[6] === '1';
+                        pendingLensSwitch = parseInt(parts[7]);
+                        updateControlsUI();
+                        
+                        // 如果有待确认的切换，显示弹窗
+                        if (pendingLensSwitch >= 0) {
+                            showSwitchModal(pendingLensSwitch);
+                        }
+                    }
+                    
+                    log('状态: 镜头' + (currentLens+1) + ' 位置' + currentPos);
+                }
+            }
+            else if (str.startsWith('L:')) {
+                // 镜头包: L:index,name,min,max,minSet,maxSet,hasLimits
+                const parts = str.substring(2).split(',');
+                if (parts.length >= 7) {
+                    const idx = parseInt(parts[0]);
+                    if (idx >= 0 && idx < 5) {
+                        lenses[idx].name = parts[1];
+                        lenses[idx].min = parseInt(parts[2]);
+                        lenses[idx].max = parseInt(parts[3]);
+                        lenses[idx].minSet = parts[4] === '1';
+                        lenses[idx].maxSet = parts[5] === '1';
+                        lenses[idx].hasLimits = parts[6] === '1';
+                    }
+                }
+            }
+            else if (str.startsWith('A:')) {
+                // 自动模式状态包: A:mode,pointA,pointB,aSet,bSet,speed,running,direction
+                const parts = str.substring(2).split(',');
+                if (parts.length >= 8) {
+                    autoMode = parts[0] === '1';
+                    autoPointA = parseInt(parts[1]);
+                    autoPointB = parseInt(parts[2]);
+                    autoPointASet = parts[3] === '1';
+                    autoPointBSet = parts[4] === '1';
+                    autoSpeed = parseInt(parts[5]);
+                    autoRunning = parts[6] === '1';
+                    autoDirection = parts[7] === '1';
+                    updateAutoModeUI();
+                }
+            }
+            else if (str.startsWith('E:')) {
+                log('数据接收完成', 'success');
+                updateDisplay();
+            }
+        }
+        
+        async function toggleConnection() {
+            if (connected) {
+                disconnect();
+            } else {
+                await connect();
+            }
+        }
+        
+        async function connect() {
+            try {
+                log('搜索设备...');
+                
+                device = await navigator.bluetooth.requestDevice({
+                    filters: [{ name: 'FocusMotor' }],
+                    optionalServices: [SERVICE_UUID]
+                });
+                
+                log('找到: ' + device.name, 'success');
+                device.addEventListener('gattserverdisconnected', onDisconnected);
+                
+                log('连接中...');
+                const server = await device.gatt.connect();
+                
+                if (server.requestMtu) {
+                    try { await server.requestMtu(128); } catch(e) {}
+                }
+                
+                const service = await server.getPrimaryService(SERVICE_UUID);
+                cmdChar = await service.getCharacteristic(CHAR_CMD_UUID);
+                statusChar = await service.getCharacteristic(CHAR_STATUS_UUID);
+                
+                await statusChar.startNotifications();
+                statusChar.addEventListener('characteristicvaluechanged', onStatusUpdate);
+                
+                connected = true;
+                updateUI();
+                log('已连接!', 'success');
+                
+                setTimeout(() => sendCmd('R'), 500);
+                
+            } catch (error) {
+                log('连接失败: ' + error.message, 'error');
+                disconnect();
+            }
+        }
+        
+        function disconnect() {
+            if (device && device.gatt.connected) {
+                device.gatt.disconnect();
+            }
+            connected = false;
+            device = null;
+            cmdChar = null;
+            statusChar = null;
+            updateUI();
+            log('已断开');
+        }
+        
+        function onDisconnected() {
+            connected = false;
+            updateUI();
+            log('设备断开', 'error');
+        }
+        
+        function onStatusUpdate(event) {
+            const decoder = new TextDecoder();
+            const value = decoder.decode(event.target.value);
+            parsePacket(value);
+        }
+        
+        async function sendCmd(cmd) {
+            console.log('sendCmd called:', cmd, 'connected:', connected, 'cmdChar:', cmdChar);
+            if (!connected || !cmdChar) {
+                log('未连接', 'error');
+                console.log('sendCmd aborted: not connected or no cmdChar');
+                return false;
+            }
+            
+            try {
+                const encoder = new TextEncoder();
+                console.log('Writing to characteristic...');
+                await cmdChar.writeValue(encoder.encode(cmd));
+                console.log('Write successful');
+                log('发送: ' + cmd, 'success');
+                return true;
+            } catch (error) {
+                console.log('Write error:', error);
+                log('发送失败: ' + error.message, 'error');
+                return false;
+            }
+        }
+        
+        // 请求切换镜头
+        async function requestSwitchLens(index) {
+            if (index === currentLens) return;
+            await sendCmd('L' + index);
+        }
+        
+        // 显示切换确认弹窗
+        function showSwitchModal(targetIndex) {
+            const lensName = lenses[targetIndex].name;
+            document.getElementById('switchModalMessage').innerHTML = 
+                `正在切换到 <strong>${lensName}</strong><br><br>` +
+                `请将镜头手动转到<strong>远焦点(∞)</strong>位置，<br>` +
+                `然后点击确定完成切换。`;
+            document.getElementById('switchModal').classList.add('show');
+        }
+        
+        // 确认切换
+        async function confirmSwitch() {
+            document.getElementById('switchModal').classList.remove('show');
+            await sendCmd('LC');
+        }
+        
+        // 取消切换
+        function cancelSwitch() {
+            document.getElementById('switchModal').classList.remove('show');
+            pendingLensSwitch = -1;
+            // 刷新状态
+            sendCmd('R');
+        }
+        
+        // 设置B点（远焦归零）
+        async function setBPoint() {
+            console.log('setBPoint called, connected:', connected);
+            if (!connected) {
+                log('请先连接设备', 'error');
+                alert('请先连接设备！');
+                return;
+            }
+            // 直接发送命令
+            log('正在设置B点...', 'info');
+            await sendCmd('B');
+            log('B点已设置，位置已归零', 'success');
+        }
+        
+        // 设置A点（近焦）
+        async function setAPoint() {
+            console.log('setAPoint called, connected:', connected);
+            if (!connected) {
+                log('请先连接设备', 'error');
+                alert('请先连接设备！');
+                return;
+            }
+            // 直接发送命令
+            log('正在设置A点...', 'info');
+            await sendCmd('A');
+            log('A点已设置', 'success');
+        }
+        
+        // 设置灵敏度
+        async function setSensitivity(value) {
+            sensitivity = parseInt(value);
+            document.getElementById('sensitivityValue').textContent = sensitivity + '%';
+            if (connected) {
+                await sendCmd('T:' + sensitivity);
+            }
+        }
+        
+        // 切换方向
+        async function toggleDirection() {
+            directionReversed = !directionReversed;
+            updateControlsUI();
+            if (connected) {
+                await sendCmd(directionReversed ? 'D1' : 'D0');
+            }
+        }
+        
+        // 重设限位
+        async function confirmReset() {
+            console.log('confirmReset called, connected:', connected);
+            if (!connected) {
+                log('请先连接设备', 'error');
+                alert('请先连接设备！');
+                return;
+            }
+            // 直接发送命令
+            log('正在发送RS命令...', 'info');
+            await sendCmd('RS');
+            log('限位已重设，请重新设置AB点', 'success');
+        }
+        
+        // 显示重命名
+        function showRename() {
+            const section = document.getElementById('renameSection');
+            section.style.display = section.style.display === 'none' ? 'flex' : 'none';
+        }
+        
+        // 重命名镜头
+        async function renameLens() {
+            const input = document.getElementById('renameInput');
+            const name = input.value.trim();
+            
+            if (!name) {
+                log('请输入名称', 'error');
+                return;
+            }
+            
+            await sendCmd('N:' + name);
+            input.value = '';
+            document.getElementById('renameSection').style.display = 'none';
+        }
+        
+        // ========== 自动往返模式函数 ==========
+        
+        // 更新自动模式UI
+        function updateAutoModeUI() {
+            const statusSpan = document.getElementById('autoModeStatus');
+            const modeOff = document.getElementById('autoModeOff');
+            const modeOn = document.getElementById('autoModeOn');
+            
+            if (autoMode) {
+                statusSpan.textContent = '(已启用)';
+                statusSpan.style.color = '#44ff44';
+                modeOff.style.display = 'none';
+                modeOn.style.display = 'block';
+                
+                // 更新A点显示
+                const aDisplay = document.getElementById('autoPointADisplay');
+                aDisplay.textContent = autoPointASet ? autoPointA : '未设置';
+                aDisplay.style.color = autoPointASet ? '#44ff44' : '#ff9944';
+                
+                // 更新B点显示
+                const bDisplay = document.getElementById('autoPointBDisplay');
+                bDisplay.textContent = autoPointBSet ? autoPointB : '未设置';
+                bDisplay.style.color = autoPointBSet ? '#44ff44' : '#ff9944';
+                
+                // 更新运行状态
+                const runDisplay = document.getElementById('autoRunningDisplay');
+                if (autoRunning) {
+                    // 运动中：autoDirection已取反，所以当前方向是!autoDirection
+                    runDisplay.textContent = !autoDirection ? 'A→B中' : 'B→A中';
+                    runDisplay.style.color = '#00d4ff';
+                } else {
+                    // 停止：显示下一次方向
+                    runDisplay.textContent = autoDirection ? '就绪→B' : '就绪→A';
+                    runDisplay.style.color = '#888';
+                }
+                
+                // 更新速度滑块
+                document.getElementById('autoSpeedSlider').value = autoSpeed;
+                document.getElementById('autoSpeedValue').textContent = autoSpeed + '%';
+                
+                // 更新开始按钮
+                const startBtn = document.getElementById('autoStartBtn');
+                const startBtnText = document.getElementById('autoStartBtnText');
+                if (autoPointASet && autoPointBSet) {
+                    startBtn.disabled = false;
+                    startBtn.style.opacity = '1';
+                    startBtnText.textContent = autoDirection ? '开始 A→B' : '开始 B→A';
+                } else {
+                    startBtn.disabled = true;
+                    startBtn.style.opacity = '0.4';
+                    startBtnText.textContent = '开始运动';
+                }
+            } else {
+                statusSpan.textContent = '(未启用)';
+                statusSpan.style.color = '#ff9944';
+                modeOff.style.display = 'block';
+                modeOn.style.display = 'none';
+            }
+        }
+        
+        // 进入自动模式
+        async function enterAutoMode() {
+            if (!connected) {
+                log('请先连接设备', 'error');
+                return;
+            }
+            await sendCmd('AM1');
+            log('进入自动往返模式', 'success');
+        }
+        
+        // 退出自动模式
+        async function exitAutoMode() {
+            if (!connected) {
+                log('请先连接设备', 'error');
+                return;
+            }
+            await sendCmd('AM0');
+            log('退出自动往返模式', 'success');
+        }
+        
+        // 设置自动模式A点
+        async function setAutoPointA() {
+            if (!connected) {
+                log('请先连接设备', 'error');
+                return;
+            }
+            await sendCmd('AA');
+            log('自动模式A点已设置: ' + currentPos, 'success');
+        }
+        
+        // 设置自动模式B点
+        async function setAutoPointB() {
+            if (!connected) {
+                log('请先连接设备', 'error');
+                return;
+            }
+            await sendCmd('AB');
+            log('自动模式B点已设置: ' + currentPos, 'success');
+        }
+        
+        // 设置自动模式速度
+        async function setAutoSpeed(value) {
+            autoSpeed = parseInt(value);
+            document.getElementById('autoSpeedValue').textContent = autoSpeed + '%';
+            if (connected) {
+                await sendCmd('AS:' + autoSpeed);
+            }
+        }
+        
+        // 开始自动运动
+        async function startAutoMove() {
+            if (!connected) {
+                log('请先连接设备', 'error');
+                return;
+            }
+            if (!autoPointASet || !autoPointBSet) {
+                log('请先设置AB点', 'error');
+                return;
+            }
+            await sendCmd('AG');
+            log('开始自动运动', 'success');
+        }
+        
+        // 停止自动运动
+        async function stopAutoMove() {
+            if (!connected) {
+                log('请先连接设备', 'error');
+                return;
+            }
+            await sendCmd('AX');
+            log('停止自动运动', 'success');
+        }
+        
+        // 初始化
+        updateUI();
+        updateDisplay();
+        updateControlsUI();
+        updateActionButtons();
+        updateAutoModeUI();
+        
+        // 注册 Service Worker (PWA 支持)
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('./sw.js')
+                .then(reg => {
+                    console.log('Service Worker 注册成功:', reg.scope);
+                })
+                .catch(err => {
+                    console.log('Service Worker 注册失败:', err);
+                });
+        }
+        
+        if (!navigator.bluetooth) {
+            log('浏览器不支持Web Bluetooth', 'error');
+            log('请用Chrome/Edge + HTTPS', 'error');
+            document.getElementById('connectBtn').disabled = true;
+        }
+    </script>
+</body>
+</html>
